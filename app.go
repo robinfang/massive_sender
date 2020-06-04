@@ -5,12 +5,11 @@ import (
     "bytes"
     "fmt"
     "io/ioutil"
-    "log"
     "net/http"
-    "net/http/httptrace"
     "os"
     "strings"
     "time"
+    "log"
 )
 
 type Body struct {
@@ -25,9 +24,18 @@ type Result struct {
 
 func check(e error) {
     if e != nil {
-        panic(e)
+        log.Fatal(e)
     }
 }
+
+var httpClient *http.Client
+
+func init() {
+    httpClient = &http.Client{
+        Timeout: 0 * time.Second,
+    }
+}
+
 func main() {
     content, err := ioutil.ReadFile("../payload_list.txt")
     check(err)
@@ -40,8 +48,8 @@ func main() {
     result_chan := make(chan Result, len(raw_lines)+23)
     body_chan := make(chan Body, len(raw_lines)+23)
 
-    for i := 0; i < 56; i++ {
-        go makeRequest(body_chan, result_chan)
+    for i := 0; i < 32; i++ {
+        go makeAllRequests(body_chan, result_chan)
     }
     for _, body := range lines {
         body_chan <- body
@@ -52,9 +60,11 @@ func main() {
     check(err)
     defer f.Close()
     w := bufio.NewWriter(f)
+    n := 0
     for i := 0; i < len(raw_lines); i++ {
         r := <-result_chan
-        // fmt.Println(n)
+        n++
+        fmt.Println(n)
         // fmt.Printf("%s,%d,%d\n", r.id, r.start, r.resp_time)
         fmt.Fprintf(w, "%s,%d,%d\n", r.id, r.start, r.resp_time)
     }
@@ -62,28 +72,27 @@ func main() {
 
 }
 
-func makeRequest(body_chan <-chan Body, result_chan chan<- Result) {
-    url := "http://127.0.0.1:8081/transaction/postTranByString"
-    for body := range body_chan {
-        // fmt.Printf("%v,%v\n", body.id, body.transaction)
-        buf := bytes.NewBuffer([]byte(body.transaction))
-        req, _ := http.NewRequest("POST", url, buf)
-        req.Header.Set("Content-Type", "application/json")
-        var start time.Time
-        var resp_time time.Duration
-        trace := &httptrace.ClientTrace{
-            GotFirstResponseByte: func() {
-                resp_time = time.Since(start)
-            },
+func makeOne(url string, body Body, result_chan chan<- Result){
+     buf := bytes.NewBuffer([]byte(body.transaction))
+        start := time.Now()
+        resp, err := httpClient.Post(url, "application/json", buf)
+        if err!=nil{
+            log.Println(err)
         }
-        req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
-        start = time.Now()
-        resp, err := http.DefaultTransport.RoundTrip(req)
-        if err != nil {
-            log.Fatal(err)
-        }
-        resp.Body.Close()
+        ioutil.ReadAll(resp.Body)
+
+        defer resp.Body.Close()
+        resp_time := time.Since(start)
+        
         // fmt.Printf("Total time: %v\n", time.Since(start))
         result_chan <- Result{body.id, start.UnixNano(), resp_time.Nanoseconds()}
+
+}
+
+func makeAllRequests(body_chan <-chan Body, result_chan chan<- Result) {
+    url := "http://192.168.2.70:8081/transaction/postTranByString"
+    for body := range body_chan {
+        // fmt.Printf("%v,%v\n", body.id, body.transaction)
+        makeOne(url, body, result_chan)
     }
 }
