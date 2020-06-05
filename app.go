@@ -38,7 +38,7 @@ func init() {
 }
 
 func main() {
-
+    fmt.Println("务必检查服务器时间与本机时间是否同步！最好利用ntp服务进行同步。")
     var wg sync.WaitGroup
     content, err := ioutil.ReadFile("../payload_list.txt")
     check(err)
