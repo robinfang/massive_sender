@@ -38,6 +38,14 @@ func init() {
 }
 
 func main() {
+    hostAddr := ""
+    if len(os.Args) > 1 {
+        hostAddr = os.Args[1]
+        fmt.Printf("hostAddr: %s\n", hostAddr) // For debug
+    } else {
+        hostAddr = "192.168.2.70:8081"
+        fmt.Printf("hostAddr: %s (default)\n", hostAddr)
+    }
     fmt.Println("务必检查服务器时间与本机时间是否同步！最好利用ntp服务进行同步。")
     var wg sync.WaitGroup
     content, err := ioutil.ReadFile("../payload_list.txt")
@@ -57,7 +65,7 @@ func main() {
     fmt.Println("go makeAllRequests")
     for i := 0; i < 48; i++ {
         wg.Add(1)
-        go makeAllRequests(bodyChan, resultChan, &wg)
+        go makeAllRequests(hostAddr, bodyChan, resultChan, &wg)
     }
     fmt.Println("pushing into bodyChan")
     for _, body := range lines {
@@ -110,9 +118,9 @@ func makeOne(url string, body bodyType, resultChan chan<- resultType) {
 
 }
 
-func makeAllRequests(bodyChan <-chan bodyType, resultChan chan<- resultType, wg *sync.WaitGroup) {
+func makeAllRequests(hostAddr string, bodyChan <-chan bodyType, resultChan chan<- resultType, wg *sync.WaitGroup) {
     defer wg.Done()
-    url := "http://192.168.2.70:8081/transaction/postTranByString"
+    url := fmt.Sprintf("http://%s/transaction/postTranByString", hostAddr)
     for body := range bodyChan {
         // fmt.Printf("%v,%v\n", body.id, body.transaction)
         makeOne(url, body, resultChan)
