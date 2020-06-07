@@ -38,6 +38,7 @@ func init() {
 }
 
 func main() {
+    fmt.Println("usage: app[.exe] [hostAddr:port]")
     hostAddr := ""
     if len(os.Args) > 1 {
         hostAddr = os.Args[1]
