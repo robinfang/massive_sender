@@ -8,6 +8,7 @@ import (
     "log"
     "net/http"
     "os"
+    "strconv"
     "strings"
     "sync"
     "time"
@@ -38,15 +39,16 @@ func init() {
 }
 
 func main() {
-    fmt.Println("usage: app[.exe] [hostAddr:port]")
-    hostAddr := ""
-    if len(os.Args) > 1 {
-        hostAddr = os.Args[1]
-        fmt.Printf("hostAddr: %s\n", hostAddr) // For debug
-    } else {
-        hostAddr = "192.168.2.70:8081"
-        fmt.Printf("hostAddr: %s (default)\n", hostAddr)
+    if len(os.Args) != 3 {
+        fmt.Println("usage: app[.exe] hostAddr:port number_of_workers")
+        os.Exit(0)
     }
+    hostAddrP := os.Args[1]
+    numberOfWorkers := os.Args[2]
+    nOfW, _ := strconv.Atoi(numberOfWorkers)
+
+    fmt.Printf("hostAddr: %s\n", hostAddrP) // For debug
+    fmt.Printf("number of workers: %s\n", numberOfWorkers)
     fmt.Println("务必检查服务器时间与本机时间是否同步！最好利用ntp服务进行同步。")
     var wg sync.WaitGroup
     content, err := ioutil.ReadFile("../payload_list.txt")
@@ -64,9 +66,9 @@ func main() {
     resultChan := make(chan resultType, len(lines)+23)
     bodyChan := make(chan bodyType, len(lines)+23)
     fmt.Println("go makeAllRequests")
-    for i := 0; i < 48; i++ {
+    for i := 0; i < nOfW; i++ {
         wg.Add(1)
-        go makeAllRequests(hostAddr, bodyChan, resultChan, &wg)
+        go makeAllRequests(hostAddrP, bodyChan, resultChan, &wg)
     }
     fmt.Println("pushing into bodyChan")
     for _, body := range lines {
@@ -124,6 +126,7 @@ func makeAllRequests(hostAddr string, bodyChan <-chan bodyType, resultChan chan<
     url := fmt.Sprintf("http://%s/transaction/postTranByString", hostAddr)
     for body := range bodyChan {
         // fmt.Printf("%v,%v\n", body.id, body.transaction)
+        time.Sleep(10 * time.Millisecond)
         makeOne(url, body, resultChan)
     }
 }
