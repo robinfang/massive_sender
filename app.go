@@ -26,7 +26,7 @@ type resultType struct {
 
 func check(e error) {
     if e != nil {
-        log.Fatal(e)
+        log.Println(e)
     }
 }
 
@@ -34,11 +34,12 @@ var httpClient *http.Client
 
 func init() {
     httpClient = &http.Client{
-        Timeout: 10 * time.Second,
+        Timeout: 60 * time.Second,
     }
 }
 
 func main() {
+    log.SetFlags(log.LstdFlags | log.Lshortfile)
     fmt.Println("务必检查服务器时间与本机时间是否同步！最好利用ntp服务进行同步。")
     var hostAddrP = flag.String("h", "", "hostAddr:port")
     var nOfW = flag.Int("n", 1, "number of workers")
@@ -105,19 +106,20 @@ func main() {
 
 }
 
-func makeOne(url string, body bodyType, resultChan chan<- resultType) {
+func makeOne(url string, body bodyType, interval *int, resultChan chan<- resultType) {
     buf := bytes.NewBuffer([]byte(body.transaction))
     start := time.Now()
     resp, err := httpClient.Post(url, "application/json", buf)
     if err != nil {
         log.Println(err)
-
+        return
     }
-    ioutil.ReadAll(resp.Body)
-
+    _, err = ioutil.ReadAll(resp.Body)
+    if err != nil {
+        log.Println(err)
+    }
     defer resp.Body.Close()
     respTime := time.Since(start)
-
     // fmt.Printf("Total time: %v\n", time.Since(start))
     resultChan <- resultType{body.id, start.UnixNano(), respTime.Nanoseconds()}
 
@@ -128,9 +130,9 @@ func makeAllRequests(hostAddr *string, interval *int, bodyChan <-chan bodyType, 
     url := fmt.Sprintf("http://%s/transaction/postTranByString", *hostAddr)
     for body := range bodyChan {
         // fmt.Printf("%v,%v\n", body.id, body.transaction)
+        makeOne(url, body, interval, resultChan)
         if *interval > 0 {
             time.Sleep((time.Duration(*interval)) * time.Millisecond)
         }
-        makeOne(url, body, resultChan)
     }
 }
